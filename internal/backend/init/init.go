@@ -26,6 +26,7 @@ import (
 	backendOSS "github.com/hashicorp/terraform/internal/backend/remote-state/oss"
 	backendPg "github.com/hashicorp/terraform/internal/backend/remote-state/pg"
 	backendS3 "github.com/hashicorp/terraform/internal/backend/remote-state/s3"
+	backendAzureStack "github.com/hashicorp/terraform/internal/backend/remote-state/stack"
 	backendSwift "github.com/hashicorp/terraform/internal/backend/remote-state/swift"
 	backendCloud "github.com/hashicorp/terraform/internal/cloud"
 )
@@ -41,8 +42,10 @@ import (
 // complex structures and supporting that over the plugin system is currently
 // prohibitively difficult. For those wanting to implement a custom backend,
 // they can do so with recompilation.
-var backends map[string]backend.InitFn
-var backendsLock sync.Mutex
+var (
+	backends     map[string]backend.InitFn
+	backendsLock sync.Mutex
+)
 
 // Init initializes the backends map with all our hardcoded backends.
 func Init(services *disco.Disco) {
@@ -56,6 +59,7 @@ func Init(services *disco.Disco) {
 		// Remote State backends.
 		"artifactory": func() backend.Backend { return backendArtifactory.New() },
 		"azurerm":     func() backend.Backend { return backendAzure.New() },
+		"azurestack":  func() backend.Backend { return backendAzureStack.New() },
 		"consul":      func() backend.Backend { return backendConsul.New() },
 		"cos":         func() backend.Backend { return backendCos.New() },
 		"etcd":        func() backend.Backend { return backendEtcdv2.New() },
