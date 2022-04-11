@@ -2182,10 +2182,6 @@ func TestContext2Plan_moduleExpandOrphansResourceInstance(t *testing.T) {
 func TestContext2Plan_resourcePreconditionPostcondition(t *testing.T) {
 	m := testModuleInline(t, map[string]string{
 		"main.tf": `
-terraform {
-  experiments = [preconditions_postconditions]
-}
-
 variable "boop" {
   type = string
 }
@@ -2445,10 +2441,6 @@ resource "test_resource" "a" {
 func TestContext2Plan_dataSourcePreconditionPostcondition(t *testing.T) {
 	m := testModuleInline(t, map[string]string{
 		"main.tf": `
-terraform {
-  experiments = [preconditions_postconditions]
-}
-
 variable "boop" {
   type = string
 }
@@ -2536,6 +2528,26 @@ resource "test_resource" "a" {
 				}
 			default:
 				t.Fatalf("unexpected %s change for %s", res.Action, res.Addr)
+			}
+		}
+		addr := mustResourceInstanceAddr("data.test_data_source.a")
+		wantCheckTypes := []addrs.CheckType{
+			addrs.ResourcePrecondition,
+			addrs.ResourcePostcondition,
+		}
+		for _, ty := range wantCheckTypes {
+			checkAddr := addr.Check(ty, 0)
+			if result, ok := plan.Conditions[checkAddr.String()]; !ok {
+				t.Errorf("no condition result for %s", checkAddr)
+			} else {
+				wantResult := &plans.ConditionResult{
+					Address: addr,
+					Result:  cty.True,
+					Type:    ty,
+				}
+				if diff := cmp.Diff(wantResult, result, valueComparer); diff != "" {
+					t.Errorf("wrong condition result for %s\n%s", checkAddr, diff)
+				}
 			}
 		}
 	})
@@ -2628,7 +2640,7 @@ resource "test_resource" "a" {
 				"results": cty.ListValEmpty(cty.String),
 			}),
 		}
-		_, diags := ctx.Plan(m, states.NewState(), &PlanOpts{
+		plan, diags := ctx.Plan(m, states.NewState(), &PlanOpts{
 			Mode: plans.RefreshOnlyMode,
 			SetVariables: InputValues{
 				"boop": &InputValue{
@@ -2640,6 +2652,21 @@ resource "test_resource" "a" {
 		assertNoErrors(t, diags)
 		if got, want := diags.ErrWithWarnings().Error(), "Resource postcondition failed: Results cannot be empty."; got != want {
 			t.Fatalf("wrong error:\ngot:  %s\nwant: %q", got, want)
+		}
+		addr := mustResourceInstanceAddr("data.test_data_source.a")
+		checkAddr := addr.Check(addrs.ResourcePostcondition, 0)
+		if result, ok := plan.Conditions[checkAddr.String()]; !ok {
+			t.Errorf("no condition result for %s", checkAddr)
+		} else {
+			wantResult := &plans.ConditionResult{
+				Address:      addr,
+				Result:       cty.False,
+				Type:         addrs.ResourcePostcondition,
+				ErrorMessage: "Results cannot be empty.",
+			}
+			if diff := cmp.Diff(wantResult, result, valueComparer); diff != "" {
+				t.Errorf("wrong condition result\n%s", diff)
+			}
 		}
 	})
 
@@ -2679,10 +2706,6 @@ resource "test_resource" "a" {
 func TestContext2Plan_outputPrecondition(t *testing.T) {
 	m := testModuleInline(t, map[string]string{
 		"main.tf": `
-terraform {
-  experiments = [preconditions_postconditions]
-}
-
 variable "boop" {
   type = string
 }
@@ -2726,6 +2749,19 @@ output "a" {
 		}
 		if got, want := outputPlan.Action, plans.Create; got != want {
 			t.Errorf("wrong planned action\ngot:  %s\nwant: %s", got, want)
+		}
+		checkAddr := addr.Check(addrs.OutputPrecondition, 0)
+		if result, ok := plan.Conditions[checkAddr.String()]; !ok {
+			t.Errorf("no condition result for %s", checkAddr)
+		} else {
+			wantResult := &plans.ConditionResult{
+				Address: addr,
+				Result:  cty.True,
+				Type:    addrs.OutputPrecondition,
+			}
+			if diff := cmp.Diff(wantResult, result, valueComparer); diff != "" {
+				t.Errorf("wrong condition result\n%s", diff)
+			}
 		}
 	})
 
@@ -2775,6 +2811,20 @@ output "a" {
 		if got, want := outputPlan.Action, plans.Create; got != want {
 			t.Errorf("wrong planned action\ngot:  %s\nwant: %s", got, want)
 		}
+		checkAddr := addr.Check(addrs.OutputPrecondition, 0)
+		if result, ok := plan.Conditions[checkAddr.String()]; !ok {
+			t.Errorf("no condition result for %s", checkAddr)
+		} else {
+			wantResult := &plans.ConditionResult{
+				Address:      addr,
+				Result:       cty.False,
+				Type:         addrs.OutputPrecondition,
+				ErrorMessage: "Wrong boop.",
+			}
+			if diff := cmp.Diff(wantResult, result, valueComparer); diff != "" {
+				t.Errorf("wrong condition result\n%s", diff)
+			}
+		}
 	})
 }
 
@@ -2821,10 +2871,6 @@ func TestContext2Plan_preconditionErrors(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.condition, func(t *testing.T) {
 			main := fmt.Sprintf(`
-			terraform {
-				experiments = [preconditions_postconditions]
-			}
-
 			resource "test_resource" "a" {
 				value = var.boop
 				lifecycle {
@@ -2870,10 +2916,6 @@ func TestContext2Plan_preconditionSensitiveValues(t *testing.T) {
 
 	m := testModuleInline(t, map[string]string{
 		"main.tf": `
-terraform {
-  experiments = [preconditions_postconditions]
-}
-
 variable "boop" {
   sensitive = true
   type      = string

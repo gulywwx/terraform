@@ -213,7 +213,7 @@ func skipWithoutRemoteTerraformVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmt.Sprintf("Error instantiating go-version for %s", version))
 	}
-	opts := tfe.AdminTerraformVersionsListOptions{
+	opts := &tfe.AdminTerraformVersionsListOptions{
 		ListOptions: tfe.ListOptions{
 			PageNumber: 1,
 			PageSize:   100,
@@ -251,6 +251,6 @@ findTfVersion:
 	}
 
 	if !hasVersion {
-		t.Skip(fmt.Sprintf("Skipping test because TFC/E does not have current Terraform version to test with (%s)", version))
+		t.Skipf("Skipping test because TFC/E does not have current Terraform version to test with (%s)", version)
 	}
 }

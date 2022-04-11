@@ -113,7 +113,7 @@ func (b *Cloud) ConfigSchema() *configschema.Block {
 			},
 			"organization": {
 				Type:        cty.String,
-				Required:    true,
+				Optional:    true,
 				Description: schemaDescriptionOrganization,
 			},
 			"token": {
@@ -152,8 +152,13 @@ func (b *Cloud) PrepareConfig(obj cty.Value) (cty.Value, tfdiags.Diagnostics) {
 		return obj, diags
 	}
 
+	// check if organization is specified in the config.
 	if val := obj.GetAttr("organization"); val.IsNull() || val.AsString() == "" {
-		diags = diags.Append(invalidOrganizationConfigMissingValue)
+		// organization is specified in the config but is invalid, so
+		// we'll fallback on TF_ORGANIZATION
+		if val := os.Getenv("TF_ORGANIZATION"); val == "" {
+			diags = diags.Append(missingConfigAttributeAndEnvVar("organization", "TF_ORGANIZATION"))
+		}
 	}
 
 	WorkspaceMapping := WorkspaceMapping{}
@@ -273,7 +278,7 @@ func (b *Cloud) Configure(obj cty.Value) tfdiags.Diagnostics {
 	}
 
 	// Check if the organization exists by reading its entitlements.
-	entitlements, err := b.client.Organizations.Entitlements(context.Background(), b.organization)
+	entitlements, err := b.client.Organizations.ReadEntitlements(context.Background(), b.organization)
 	if err != nil {
 		if err == tfe.ErrResourceNotFound {
 			err = fmt.Errorf("organization %q at host %s not found.\n\n"+
@@ -336,14 +341,21 @@ func (b *Cloud) setConfigurationFields(obj cty.Value) tfdiags.Diagnostics {
 	var diags tfdiags.Diagnostics
 
 	// Get the hostname.
+	b.hostname = os.Getenv("TF_HOSTNAME")
 	if val := obj.GetAttr("hostname"); !val.IsNull() && val.AsString() != "" {
 		b.hostname = val.AsString()
-	} else {
+	} else if b.hostname == "" {
 		b.hostname = defaultHostname
 	}
 
-	// Get the organization.
-	if val := obj.GetAttr("organization"); !val.IsNull() {
+	// We can have two options, setting the organization via the config
+	// or using TF_ORGANIZATION. Since PrepareConfig() validates that one of these
+	// values must exist, we'll initially set it to the env var and override it if
+	// specified in the configuration.
+	b.organization = os.Getenv("TF_ORGANIZATION")
+
+	// Check if the organization is present and valid in the config.
+	if val := obj.GetAttr("organization"); !val.IsNull() && val.AsString() != "" {
 		b.organization = val.AsString()
 	}
 
@@ -452,10 +464,10 @@ func (b *Cloud) Workspaces() ([]string, error) {
 
 	// Otherwise, multiple workspaces are being mapped. Query Terraform Cloud for all the remote
 	// workspaces by the provided mapping strategy.
-	options := tfe.WorkspaceListOptions{}
+	options := &tfe.WorkspaceListOptions{}
 	if b.WorkspaceMapping.Strategy() == WorkspaceTagsStrategy {
 		taglist := strings.Join(b.WorkspaceMapping.Tags, ",")
-		options.Tags = &taglist
+		options.Tags = taglist
 	}
 
 	for {
