@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/profiles/2017-03-09/resources/mgmt/resources"
-	armStorage "github.com/Azure/azure-sdk-for-go/profiles/2017-03-09/storage/mgmt/storage"
+	armStorage "github.com/Azure/azure-sdk-for-go/services/storage/mgmt/2019-06-01/storage"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/hashicorp/go-azure-helpers/authentication"
@@ -181,8 +181,7 @@ func (c ArmClient) getBlobClient(ctx context.Context) (*blobs.Client, error) {
 	accessKey := c.accessKey
 	if accessKey == "" {
 		log.Printf("[DEBUG] Building the Blob Client from an Access Token (using user credentials)")
-		// keys, err := c.storageAccountsClient.ListKeys(ctx, c.resourceGroupName, c.storageAccountName, "")
-		keys, err := c.storageAccountsClient.ListKeys(ctx, c.resourceGroupName, c.storageAccountName)
+		keys, err := c.storageAccountsClient.ListKeys(ctx, c.resourceGroupName, c.storageAccountName, "")
 		if err != nil {
 			return nil, fmt.Errorf("Error retrieving keys for Storage Account %q: %s", c.storageAccountName, err)
 		}
@@ -227,8 +226,7 @@ func (c ArmClient) getContainersClient(ctx context.Context) (*containers.Client,
 	accessKey := c.accessKey
 	if accessKey == "" {
 		log.Printf("[DEBUG] Building the Container Client from an Access Token (using user credentials)")
-		// keys, err := c.storageAccountsClient.ListKeys(ctx, c.resourceGroupName, c.storageAccountName, "")
-		keys, err := c.storageAccountsClient.ListKeys(ctx, c.resourceGroupName, c.storageAccountName)
+		keys, err := c.storageAccountsClient.ListKeys(ctx, c.resourceGroupName, c.storageAccountName, "")
 		if err != nil {
 			return nil, fmt.Errorf("Error retrieving keys for Storage Account %q: %s", c.storageAccountName, err)
 		}
